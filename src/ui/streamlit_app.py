@@ -14,6 +14,8 @@ from src.data.loader import load_financial_data, get_summary
 from src.analysis.ratios import compute_all_ratios, interpret_ratios
 from src.analysis.statistics import trend_analysis, dupont_analysis
 from src.analysis.anomaly import zscore_anomalies, benford_test
+from src.analysis.cashflow import analyze_cashflow_structure, compute_fcf, cashflow_summary
+from src.data.loader import detect_statement_type
 
 st.set_page_config(
     page_title='财智分析 Agent',
@@ -170,6 +172,45 @@ if current and current in st.session_state.df_cache:
                 lines += f'- **{k}**: {v}\n'
             st.session_state.messages.append({'role': 'assistant', 'content': lines})
             st.rerun()
+
+    # 现金流量表专用快捷分析
+    stype = detect_statement_type(df)
+    if stype == '现金流量表':
+        st.subheader('💵 现金流专项分析')
+        cf_cols = st.columns(4)
+
+        with cf_cols[0]:
+            if st.button('📊 现金流结构', use_container_width=True):
+                result = analyze_cashflow_structure(df)
+                lines = '## 现金流结构分析\n\n'
+                for k, v in result.items():
+                    lines += f'- **{k}**: {v}\n'
+                st.session_state.messages.append({'role': 'assistant', 'content': lines})
+                st.rerun()
+
+        with cf_cols[1]:
+            if st.button('💰 自由现金流', use_container_width=True):
+                result = compute_fcf(df)
+                lines = '## 自由现金流 (FCF)\n\n'
+                for k, v in result.items():
+                    lines += f'- **{k}**: {v}\n'
+                st.session_state.messages.append({'role': 'assistant', 'content': lines})
+                st.rerun()
+
+        with cf_cols[2]:
+            if st.button('📋 综合报告', use_container_width=True):
+                # Auto-detect associated BS and IS from cache
+                is_df, bs_df = None, None
+                for key, cached_df in st.session_state.df_cache.items():
+                    t = detect_statement_type(cached_df)
+                    if t == '利润表':
+                        is_df = cached_df
+                    elif t == '资产负债表':
+                        bs_df = cached_df
+
+                lines = cashflow_summary(df, is_df, bs_df)
+                st.session_state.messages.append({'role': 'assistant', 'content': f'## 现金流量综合分析\n\n{lines}'})
+                st.rerun()
 
 # ---- 对话区域 ----
 st.subheader('💬 对话')

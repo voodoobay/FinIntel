@@ -21,6 +21,9 @@ from src.analysis.forecasting import linear_forecast, forecast_summary, moving_a
 from src.analysis.financial_statements import (
     common_size_bs, common_size_is, horizontal_analysis, vertical_analysis_bs,
 )
+from src.analysis.cashflow import (
+    analyze_cashflow_structure, compute_fcf, cashflow_ratios, cashflow_summary,
+)
 
 
 def test_data_loader():
@@ -125,6 +128,26 @@ def test_fs_analysis():
     print('[PASS] FS Analysis\n')
 
 
+def test_cashflow():
+    print('=== 现金流分析模块 ===')
+    cf_fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sample_data', '现金流量表_示例.csv')
+    cf = load_financial_data(cf_fp)
+
+    # Structure
+    structure = analyze_cashflow_structure(cf)
+    print('现金流结构:', structure)
+
+    # FCF
+    fcf = compute_fcf(cf)
+    print('自由现金流:', fcf)
+
+    # Summary (without cross-report for quick test)
+    summary = cashflow_summary(cf)
+    print(summary[:200])
+
+    print('[PASS] Cashflow\n')
+
+
 if __name__ == '__main__':
     try:
         test_data_loader()
@@ -133,6 +156,7 @@ if __name__ == '__main__':
         test_anomaly()
         test_forecasting()
         test_fs_analysis()
+        test_cashflow()
         print('=' * 50)
         print('ALL TESTS PASSED')
     except Exception as e:

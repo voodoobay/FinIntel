@@ -20,6 +20,9 @@ from src.analysis.forecasting import linear_forecast, forecast_summary, exponent
 from src.analysis.financial_statements import (
     common_size_bs, common_size_is, horizontal_analysis, vertical_analysis_bs, vertical_analysis_is,
 )
+from src.analysis.cashflow import (
+    analyze_cashflow_structure, compute_fcf, cashflow_ratios, cashflow_summary,
+)
 
 
 # 全局数据缓存
@@ -202,6 +205,74 @@ def tool_common_size(file_path: str) -> str:
     return result.to_string()
 
 
+def tool_cashflow_structure(file_path: str) -> str:
+    """现金流结构分析：三大活动贡献比例和健康度诊断"""
+    if file_path not in _data_cache:
+        return '请先使用 load_financials 加载数据'
+    result = analyze_cashflow_structure(_data_cache[file_path])
+    lines = ['【现金流结构分析】']
+    for k, v in result.items():
+        lines.append(f'{k}: {v}')
+    return '\n'.join(lines)
+
+
+def tool_fcf_analysis(file_path: str) -> str:
+    """自由现金流计算：OCF - CapEx = FCF"""
+    if file_path not in _data_cache:
+        return '请先使用 load_financials 加载数据'
+    result = compute_fcf(_data_cache[file_path])
+    lines = ['【自由现金流 FCF】']
+    for k, v in result.items():
+        lines.append(f'{k}: {v}')
+    return '\n'.join(lines)
+
+
+def tool_cashflow_quality(file_path: str) -> str:
+    """
+    现金流质量分析：营业收入现金含量、净利润现金含量、现金流负债比率。
+    自动关联已加载的利润表和资产负债表做交叉分析。
+    """
+    if file_path not in _data_cache:
+        return '请先使用 load_financials 加载数据'
+    cf = _data_cache[file_path]
+
+    # 尝试从缓存中找到利润表和资产负债表
+    is_df, bs_df = None, None
+    for key, df in _data_cache.items():
+        from src.data.loader import detect_statement_type
+        stype = detect_statement_type(df)
+        if stype == '利润表':
+            is_df = df
+        elif stype == '资产负债表':
+            bs_df = df
+
+    result = cashflow_ratios(cf, is_df, bs_df)
+    lines = ['【现金流质量分析】']
+    for k, v in result.items():
+        if v is not None:
+            lines.append(f'{k}: {round(v, 4)}')
+    if is_df is None or bs_df is None:
+        lines.append('\n提示: 同时加载利润表和资产负债表可获得更完整的交叉分析')
+    return '\n'.join(lines)
+
+
+def tool_cashflow_full(file_path: str) -> str:
+    """现金流量综合分析：结构 + FCF + 质量"""
+    if file_path not in _data_cache:
+        return '请先使用 load_financials 加载数据'
+
+    is_df, bs_df = None, None
+    for key, df in _data_cache.items():
+        from src.data.loader import detect_statement_type
+        stype = detect_statement_type(df)
+        if stype == '利润表':
+            is_df = df
+        elif stype == '资产负债表':
+            bs_df = df
+
+    return cashflow_summary(_data_cache[file_path], is_df, bs_df)
+
+
 # ---- 工具注册表 ----
 
 TOOL_DEFINITIONS = [
@@ -343,6 +414,50 @@ TOOL_DEFINITIONS = [
             "required": ["file_path"]
         }
     },
+    {
+        "name": "cashflow_structure",
+        "description": "现金流结构分析：分析经营/投资/筹资三大活动的现金流贡献比例，诊断企业现金流健康度类型（健康成长型/偿债收缩型/融资扩张型/稳健型）。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "已加载的现金流量表文件路径"}
+            },
+            "required": ["file_path"]
+        }
+    },
+    {
+        "name": "fcf_analysis",
+        "description": "自由现金流分析：计算自由现金流 FCF = 经营活动现金流净额 - 资本支出，衡量企业真正可自由支配的现金。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "已加载的现金流量表文件路径"}
+            },
+            "required": ["file_path"]
+        }
+    },
+    {
+        "name": "cashflow_quality",
+        "description": "现金流质量分析：营业收入现金含量、净利润现金含量、现金流负债比率等。自动关联利润表和资产负债表做交叉分析。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "已加载的现金流量表文件路径"}
+            },
+            "required": ["file_path"]
+        }
+    },
+    {
+        "name": "cashflow_full",
+        "description": "现金流量综合分析报告：包含结构诊断、自由现金流、质量比率的完整报告。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "已加载的现金流量表文件路径"}
+            },
+            "required": ["file_path"]
+        }
+    },
 ]
 
 
@@ -359,6 +474,10 @@ TOOL_HANDLERS = {
     "forecast": tool_forecast,
     "correlation": tool_correlation,
     "common_size": tool_common_size,
+    "cashflow_structure": tool_cashflow_structure,
+    "fcf_analysis": tool_fcf_analysis,
+    "cashflow_quality": tool_cashflow_quality,
+    "cashflow_full": tool_cashflow_full,
 }
 
 
